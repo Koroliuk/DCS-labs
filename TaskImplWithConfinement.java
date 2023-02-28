@@ -18,6 +18,13 @@ public class TaskImplWithConfinement {
         List<Double> D1 = DataGenerator.generateVector(n);
         List<Double> C1 = DataGenerator.generateVector(n);
         saveGeneratedDataToFile(MO1, D1, C1);
+//        List<Double> D1 = List.of(1., 2., 3.);
+//        List<Double> C1 = List.of(3., 2., 1.);
+//        List<List<Double>> MO1 = List.of(
+//                List.of(1., 15., 12.),
+//                List.of(3., 4., 9.),
+//                List.of(4., 2., 3.)
+//        );
 
         List<List<Double>> MO2 = MO1.stream()
                 .map(ArrayList::new)
@@ -58,6 +65,7 @@ public class TaskImplWithConfinement {
 
             try {
                 List<Double> B = future.get();
+                System.out.println(getListAsString(B));
                 System.out.println("Зберігаємо та виводимо B");
             } catch (ExecutionException | InterruptedException e) {
                 throw new RuntimeException(e);
@@ -97,6 +105,7 @@ public class TaskImplWithConfinement {
 
             try {
                 List<Double> S = future.get();
+                System.out.println(getListAsString(S));
                 System.out.println("Зберігаємо та виводимо S");
             } catch (ExecutionException | InterruptedException e) {
                 throw new RuntimeException(e);
@@ -108,34 +117,29 @@ public class TaskImplWithConfinement {
 
         thread1.join();
         thread2.join();
-
-        System.out.println("res");
     }
 
     private static List<List<Double>> multiplyMatrices(List<List<Double>> matrix1, List<List<Double>> matrix2) {
-        int m1Rows = matrix1.size();
-        int m1Cols = matrix1.get(0).size();
-        int m2Cols = matrix2.get(0).size();
-
         List<List<Double>> result = new ArrayList<>();
-
-        for (int i = 0; i < m1Rows; i++) {
+        for (int i = 0; i < matrix1.size(); i++) {
             List<Double> row = new ArrayList<>();
-            for (int j = 0; j < m2Cols; j++) {
-                row.add(0.0);
+            for (int j = 0; j < matrix2.get(0).size(); j++) {
+                row.add(0.);
             }
             result.add(row);
         }
 
-        for (int i = 0; i < m1Rows; i++) {
-            for (int j = 0; j < m2Cols; j++) {
-                for (int k = 0; k < m1Cols; k++) {
-                    double value = result.get(i).get(j) + matrix1.get(i).get(k) * matrix2.get(k).get(j);
-                    result.get(i).set(j, value);
+        for (int i = 0; i < matrix1.size(); i++) {
+            for (int j = 0; j < matrix2.get(0).size(); j++) {
+                for (int k = 0; k < matrix2.size(); k++) {
+                    double curr = result.get(i).get(j);
+                    curr += matrix1.get(i).get(k) * matrix2.get(k).get(j);
+                    result.get(i).set(j, curr);
+                    List<Double> arr = result.get(i);
+                    result.set(i, arr);
                 }
             }
         }
-
         return result;
     }
 
@@ -151,10 +155,10 @@ public class TaskImplWithConfinement {
             fileWriter.write(moAsStr);
 
             fileWriter.write(String.format("D (1X%s)" + System.lineSeparator(), d.size()));
-            fileWriter.write(dAsString);
+            fileWriter.write(dAsString + System.lineSeparator());
 
             fileWriter.write(String.format("C (1X%s)" + System.lineSeparator(), c.size()));
-            fileWriter.write(cAsString);
+            fileWriter.write(cAsString + System.lineSeparator());
 
             fileWriter.close();
         } catch (IOException e) {
