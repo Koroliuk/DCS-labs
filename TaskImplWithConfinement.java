@@ -15,24 +15,15 @@ import java.util.stream.Collectors;
 
 public class TaskImplWithConfinement {
 
-    private static final Integer INITIAL_MATRIX_DIMENSION1 = 5;
+    private static final Integer INITIAL_MATRIX_DIMENSION = 5;
 
     public static void main(String[] args) throws InterruptedException {
-        int matrixDimension = INITIAL_MATRIX_DIMENSION1 == null ? DataGenerator.generateInteger() : INITIAL_MATRIX_DIMENSION1;
-//        List<List<Double>> MO = DataGenerator.generateMatrix(matrixDimension, matrixDimension);
-//        List<Double> D = DataGenerator.generateVector(matrixDimension);
-//        List<Double> C = DataGenerator.generateVector(matrixDimension);
-
-        List<Double> D = List.of(1., 2., 3.);
-        List<Double> C = List.of(3., 2., 1.);
-        List<List<Double>> MO = List.of(
-                List.of(1., 15., 12.),
-                List.of(3., 4., 9.),
-                List.of(4., 2., 3.)
-        );
+        int matrixDimension = INITIAL_MATRIX_DIMENSION == null ? DataGenerator.generateInteger() : INITIAL_MATRIX_DIMENSION;
+        List<List<Double>> MO = DataGenerator.generateMatrix(matrixDimension, matrixDimension);
+        List<Double> D = DataGenerator.generateVector(matrixDimension);
+        List<Double> C = DataGenerator.generateVector(matrixDimension);
 
         saveGeneratedDataToFile(MO, D, C);
-
 
         LocalDateTime startTime = LocalDateTime.now();
         System.out.println("Початок: " + startTime);
@@ -278,7 +269,7 @@ public class TaskImplWithConfinement {
         }
 
         private static double generateDouble() {
-            return Long.MAX_VALUE * random.nextDouble();
+            return Integer.MAX_VALUE * random.nextDouble();
         }
 
         public static int generateInteger() {
