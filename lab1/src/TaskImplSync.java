@@ -8,28 +8,36 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 
-public class TaskImplWithConfinement {
+public class TaskImplSync {
 
-    private static final Integer INITIAL_MATRIX_DIMENSION = 5;
+    private static final Integer INITIAL_MATRIX_DIMENSION = null;
+    private static volatile List<List<Double>> MO;
+    private static volatile List<Double> D;
+    private static volatile List<Double> C;
 
     public static void main(String[] args) throws InterruptedException {
         int matrixDimension = INITIAL_MATRIX_DIMENSION == null ? DataGenerator.generateInteger() : INITIAL_MATRIX_DIMENSION;
-        List<List<Double>> MO = DataGenerator.generateMatrix(matrixDimension, matrixDimension);
-        List<Double> D = DataGenerator.generateVector(matrixDimension);
-        List<Double> C = DataGenerator.generateVector(matrixDimension);
+        MO = DataGenerator.generateMatrix(matrixDimension, matrixDimension);
+        D = DataGenerator.generateVector(matrixDimension);
+        C = DataGenerator.generateVector(matrixDimension);
 
         saveGeneratedDataToFile(MO, D, C);
 
         LocalDateTime startTime = LocalDateTime.now();
         System.out.println("Початок: " + startTime);
 
-        Thread thread1 = new Thread(() -> calculateB(MO, D, C));
-        Thread thread2 = new Thread(() -> calculateS(MO, D, C));
+        Semaphore semMO = new Semaphore(1);
+        Semaphore semD = new Semaphore(1);
+        Semaphore semC = new Semaphore(1);
+
+        Thread thread1 = new Thread(() -> calculateB(semMO, semD, semC));
+        Thread thread2 = new Thread(() -> calculateS(semMO, semD, semC));
 
         thread1.start();
         thread2.start();
@@ -44,31 +52,53 @@ public class TaskImplWithConfinement {
         System.out.println("Всього зайняло: " + timeOfExecution);
     }
 
-    private static void calculateS(List<List<Double>> MO, List<Double> D, List<Double> C) {
+    private static void calculateS(Semaphore semMO, Semaphore semD, Semaphore semC) {
         System.out.println("Тред S: початок обчислення S");
 
-        List<Double> localD = new ArrayList<>(D);
-        List<Double> localC = new ArrayList<>(C);
-        List<List<Double>> localMO = MO.stream()
-                .map(ArrayList::new)
-                .collect(Collectors.toList());
-
         Supplier<List<Double>> CMOSupplier = () -> {
-            System.out.println("Тред S: початок обчислення C*MO");
-            List<List<Double>> CAsMatrix = List.of(localC);
-            List<List<Double>> SMO = multiplyMatrices(CAsMatrix, localMO);
-            System.out.println("Тред S: кінець обчислення C*MO");
-            return SMO.get(0);
+            try {
+                System.out.println("Тред S: початок обчислення C*MO");
+                System.out.println("Тред S: очікує дозвіл на C");
+                semC.acquire();
+                System.out.println("Тред S: отримує дозвіл на C");
+                System.out.println("Тред S: очікує дозвіл на MO");
+                semMO.acquire();
+                System.out.println("Тред S: отримує дозвіл на MO");
+                List<List<Double>> CAsMatrix = List.of(C);
+                List<List<Double>> SMO = multiplyMatrices(CAsMatrix, MO);
+                semC.release();
+                System.out.println("Тред S: звільняє дозвіл на С");
+                semMO.release();
+                System.out.println("Тред S: звільняє дозвіл на MO");
+                System.out.println("Тред S: кінець обчислення C*MO");
+                return SMO.get(0);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
         };
 
         Supplier<List<Double>> sumOfDCSupplier = () -> {
-            System.out.println("Тред S: початок обчислення D+C");
-            List<Double> result = new ArrayList<>();
-            for (int i = 0; i < localC.size(); i++) {
-                result.add(kahanSum(localD.get(i), localC.get(i)));
+            try {
+                System.out.println("Тред S: початок обчислення D+C");
+                List<Double> result = new ArrayList<>();
+                System.out.println("Тред S: очікує дозвіл на D");
+                semD.acquire();
+                System.out.println("Тред S: отримує дозвіл на D");
+                System.out.println("Тред S: очікує дозвіл на С");
+                semC.acquire();
+                System.out.println("Тред S: отримує дозвіл на С");
+                for (int i = 0; i < C.size(); i++) {
+                    result.add(kahanSum(D.get(i), C.get(i)));
+                }
+                semC.release();
+                System.out.println("Тред S: звільняє дозвіл на C");
+                semD.release();
+                System.out.println("Тред S: звільняє дозвіл на D");
+                System.out.println("Тред S: кінець обчислення D+C");
+                return result;
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             }
-            System.out.println("Тред S: кінець обчислення D+C");
-            return result;
         };
 
         BiFunction<List<Double>, List<Double>, List<Double>> sumAndSortResult = (list1, list2) -> {
@@ -96,35 +126,56 @@ public class TaskImplWithConfinement {
         }
     }
 
-    private static void calculateB(List<List<Double>> mo, List<Double> d, List<Double> c) {
+    private static void calculateB(Semaphore semMO, Semaphore semD, Semaphore semC) {
         System.out.println("Тред B: початок обчислення B");
 
-        List<List<Double>> localMO = mo.stream()
-                .map(ArrayList::new)
-                .collect(Collectors.toList());
-        List<Double> localD = new ArrayList<>(d);
-        List<Double> localC = new ArrayList<>(c);
-
         Supplier<List<Double>> DMOSupplier = () -> {
-            System.out.println("Тред B: початок обчислення D*MO");
-            List<List<Double>> dAsMatrix = List.of(localD);
-            List<List<Double>> DMO = multiplyMatrices(dAsMatrix, localMO);
-            System.out.println("Тред B: кінець обчислення D*MO");
-            return DMO.get(0);
+            try {
+                System.out.println("Тред B: початок обчислення D*MO");
+                System.out.println("Тред B: очікує дозвіл на D");
+                semD.acquire();
+                System.out.println("Тред B: отримує дозвіл на D");
+                System.out.println("Тред B: очікує дозвіл на MO");
+                semMO.acquire();
+                System.out.println("Тред B: отримує дозвіл на MO");
+                List<List<Double>> dAsMatrix = List.of(D);
+                List<List<Double>> DMO = multiplyMatrices(dAsMatrix, MO);
+                semD.release();
+                System.out.println("Тред B: звільняє дозвіл на D");
+                semMO.release();
+                System.out.println("Тред B: звільняє дозвіл на MO");
+                System.out.println("Тред B: кінець обчислення D*MO");
+                return DMO.get(0);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
         };
 
         Supplier<List<Double>> minDCSupplier = () -> {
-            System.out.println("Тред B: початок обчислення min(D)*C");
-            double minD = localD.stream()
-                    .min(Comparator.naturalOrder())
-                    .get();
+            try {
+                System.out.println("Тред B: початок обчислення min(D)*C");
+                System.out.println("Тред B: очікує дозвіл на D");
+                semD.acquire();
+                System.out.println("Тред B: отримує дозвіл на D");
+                double minD = D.stream()
+                        .min(Comparator.naturalOrder())
+                        .get();
+                semD.release();
+                System.out.println("Тред B: звільняє дозвіл на D");
 
-            List<Double> minDC = localC.stream()
-                    .map(num -> num * minD)
-                    .collect(Collectors.toList());
-
-            System.out.println("Тред B: кінець обчислення min(D)*C");
-            return minDC;
+                System.out.println("Тред B: очікує дозвіл на C");
+                semC.acquire();
+                System.out.println("Тред B: отримує дозвіл на C");
+                List<Double> minDC = C.stream()
+                        .map(num -> num * minD)
+                        .collect(Collectors.toList());
+                semC.release();
+                System.out.println("Тред B: звільняє дозвіл на C");
+                System.out.println("Тред B: кінець обчислення min(D)*C");
+                return minDC;
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
         };
 
         BiFunction<List<Double>, List<Double>, List<Double>> sumOfVectors = (list1, list2) -> {
@@ -234,7 +285,7 @@ public class TaskImplWithConfinement {
 
     private static String getMatrixAsString(List<List<Double>> matrix) {
         return matrix.stream()
-                .map(TaskImplWithConfinement::getListAsString)
+                .map(TaskImplSync::getListAsString)
                 .map(s -> s + System.lineSeparator())
                 .reduce("", (s1, s2) -> s1 + s2);
     }
