@@ -10,15 +10,19 @@ import java.util.List;
 import java.util.concurrent.*;
 
 public class HTMExample {
+    // Необхідні дані для підключення до бази даних
     private static final String DB_URL = "jdbc:postgresql://localhost/example_db";
     private static final String DB_USER = "user1";
     private static final String DB_PASSWORD = "p@SSw0rd";
 
+    // Кількість потоків
     private static final int amountOfThreads = 50;
 
+    // Імена клієнтів
     private static final List<String> clientNames = List.of("Bob", "Charley", "John", "Amadeu", "Jack");
-//    private static final List<String> namesToUpdate = new ArrayList<>(List.of(""));
-    private static final List<String> namesToUpdate = new ArrayList<>();
+    // Додаємо також окремий список із пустим значенням, що дозволить генерувати випадкові
+    // запити оновлення даних в базі як для 3, так і для 2 клієнтів
+    private static final List<String> namesToUpdate = new ArrayList<>(List.of(""));
 
     public static void main(String[] args) {
         namesToUpdate.addAll(clientNames);
@@ -52,6 +56,7 @@ public class HTMExample {
         }
     }
 
+    // Метод, що оновлює баланс рахунку трьох чи двох випадкових клієнтів
     private static long executeRandomUpdate(Connection connection) throws SQLException {
         long startTime = System.currentTimeMillis();
         Collections.shuffle(namesToUpdate);
@@ -64,6 +69,7 @@ public class HTMExample {
         return endTime - startTime;
     }
 
+    // Метод ініціалізації структури бази
     private static void initDb(Connection connection) throws SQLException {
         connection.createStatement().execute("DROP TABLE IF EXISTS Users;");
         connection.createStatement().execute("CREATE TABLE IF NOT EXISTS Users (name  varchar(100) PRIMARY KEY, balance integer NOT NULL);");
