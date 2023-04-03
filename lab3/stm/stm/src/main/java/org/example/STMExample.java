@@ -13,12 +13,15 @@ import java.util.List;
 import java.util.concurrent.*;
 
 public class STMExample {
+    // Необхідні дані для підключення до бази даних
     private static final String DB_URL = "jdbc:postgresql://localhost/example_db";
     private static final String DB_USER = "user1";
     private static final String DB_PASSWORD = "p@SSw0rd";
 
+    // Кількість потоків
     private static final int amountOfThreads = 50;
 
+    // Імена клієнтів
     private static final List<String> clientNames = List.of("Bob", "Charley", "John", "Amadeu", "Jack");
 
     public static void main(String[] args) {
@@ -51,12 +54,14 @@ public class STMExample {
         }
     }
 
+    // Метод, що оновлює баланс рахунку трьох чи двох випадкових клієнтів
     private static long executeRandomUpdate(List<User> users, Connection connection) {
         long startTime = System.currentTimeMillis();
         Collections.shuffle(users);
         User user1 = users.get(0);
         User user2 = users.get(1);
         User user3 = users.get(2);
+        // Критична секція, що вимагає виконання тільки одним потоком одночасно, задля забезпечення цілісності даних
         StmUtils.atomic(() -> {
             String name1 = null;
             String name2 = null;
@@ -88,6 +93,7 @@ public class STMExample {
         return endTime - startTime;
     }
 
+    // Метод ініціалізації структури бази, повертає список користувачів
     private static List<User> initDb(Connection connection) throws SQLException {
         connection.createStatement().execute("DROP TABLE IF EXISTS Users;");
         connection.createStatement().execute("CREATE TABLE IF NOT EXISTS Users (name  varchar(100) PRIMARY KEY, balance integer NOT NULL);");
@@ -102,10 +108,16 @@ public class STMExample {
             users.add(new User(name, defaultBalance));
         }
         insert.executeBatch();
-//        users.add(null);
+
+        // Додаємо також окреме пусте значення, що дозволить генерувати випадкові
+        // запити оновлення даних в базі як для 3, так і для 2 клієнтів
+        users.add(null);
+
         return users;
     }
 
+    // Клас користвача. Має поле балансу, яке є Txn об'єктом, до якого можна
+    // забезпечити доступ тільки одного потоку в межах методу StmUtils.atomic()
     private static class User {
         private final String name;
         private final TxnInteger balance;
